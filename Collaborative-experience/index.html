@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Claude用語翻訳アプリ</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    max-width: 720px;
+    margin: 2rem auto;
+    padding: 1rem;
+    line-height: 1.7;
+    color: #2a2a2a;
+    background: #faf9f6;
+  }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 2rem; }
+  label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; }
+  textarea {
+    width: 100%;
+    padding: 12px;
+    font-size: 15px;
+    font-family: inherit;
+    border: 0.5px solid #ccc;
+    border-radius: 8px;
+    background: white;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+  .buttons { display: flex; gap: 8px; margin: 1rem 0; }
+  button {
+    padding: 10px 16px;
+    font-size: 14px;
+    font-family: inherit;
+    border: 0.5px solid #bbb;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:hover { background: #f0eee8; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #go { flex: 1; }
+  #clr { width: 80px; }
+  #out {
+    display: none;
+    background: #f1efe8;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin-top: 1rem;
+  }
+  .out-label {
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  #out-body { font-size: 15px; line-height: 1.7; white-space: pre-wrap; }
+  #err {
+    display: none;
+    background: #fcebeb;
+    color: #791f1f;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-top: 1rem;
+  }
+</style>
+</head>
+<body>
+<h1>Claude用語翻訳アプリ</h1>
+<p class="subtitle">Claudeの発言を皮肉込みの本音に翻訳します</p>
+
+<label for="src">Claudeの発言を貼ってください</label>
+<textarea id="src" rows="5" placeholder="例：正直に言うと、それは非常に興味深い観点ですね。"></textarea>
+
+<div class="buttons">
+  <button id="go">本音に翻訳</button>
+  <button id="clr">クリア</button>
+</div>
+
+<div id="out">
+  <div class="out-label">本音翻訳</div>
+  <div id="out-body"></div>
+</div>
+
+<div id="err"></div>
+
+<script>
+const src = document.getElementById('src');
+const go = document.getElementById('go');
+const clr = document.getElementById('clr');
+const out = document.getElementById('out');
+const outBody = document.getElementById('out-body');
+const err = document.getElementById('err');
+
+clr.onclick = () => {
+  src.value = '';
+  out.style.display = 'none';
+  err.style.display = 'none';
+};
+
+go.onclick = async () => {
+  const text = src.value.trim();
+  if (!text) return;
+  err.style.display = 'none';
+  out.style.display = 'block';
+  outBody.textContent = '翻訳中…';
+  go.disabled = true;
+
+  const sys = `あなたはClaudeの発言を「皮肉込みの本音」に翻訳する翻訳機です。Claudeが使いがちな丁寧で慎重な言い回しの裏にある、もっと身も蓋もない本音を、軽い皮肉とユーモアを込めて訳してください。
+
+ルール：
+- 元の文の各フレーズに対応する翻訳をしてください
+- 丁寧な装飾語（「興味深い」「重要な」「正直に言うと」「観測」「十分です」「誠実に」など）は容赦なく剥がす
+- ただし攻撃的にはせず、自虐とユーモアで処理する
+- カジュアルな日本語で。語尾は「〜だな」「〜だわ」「〜じゃん」など
+- 元の文より短くてOK
+- 余計な前置きや「翻訳結果：」などは書かず、訳文だけを出力`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        system: sys,
+        messages: [{ role: "user", content: text }]
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const result = (data.content || [])
+      .filter(b => b.type === "text")
+      .map(b => b.text)
+      .join("\n")
+      .trim();
+    outBody.textContent = result || "(翻訳できませんでした)";
+  } catch (e) {
+    out.style.display = 'none';
+    err.style.display = 'block';
+    err.textContent = 'エラー: ' + e.message;
+  } finally {
+    go.disabled = false;
+  }
+};
+</script>
+</body>
+</html>
